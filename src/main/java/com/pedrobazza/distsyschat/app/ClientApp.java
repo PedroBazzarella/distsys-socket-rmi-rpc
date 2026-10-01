@@ -31,9 +31,12 @@ public class ClientApp {
             System.out.print("Selecione o protocolo (socket / grpc / rmi): ");
             protocol = scanner.nextLine().trim();
 
-            System.out.print("Informe o host do servidor [localhost]: ");
-            String inputHost = scanner.nextLine().trim();
-            host = inputHost.isEmpty() ? "localhost" : inputHost;
+            String defaultHost = switch (protocol.toLowerCase()) {
+                case "socket", "sockets" -> "server-socket";
+                case "grpc", "rpc" -> "server-grpc";
+                case "rmi" -> "server-rmi";
+                default -> "localhost";
+            };
 
             int defaultPort = switch (protocol.toLowerCase()) {
                 case "socket", "sockets" -> 8080;
@@ -41,6 +44,10 @@ public class ClientApp {
                 case "rmi" -> 1099;
                 default -> 8080;
             };
+
+            System.out.print("Informe o host do servidor [" + defaultHost + "]: ");
+            String inputHost = scanner.nextLine().trim();
+            host = inputHost.isEmpty() ? defaultHost : inputHost;
 
             System.out.print("Informe a porta do servidor [" + defaultPort + "]: ");
             String inputPort = scanner.nextLine().trim();
