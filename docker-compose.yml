@@ -1,0 +1,55 @@
+services:
+  # Servidor via Sockets TCP
+  server-socket:
+    build: .
+    image: distsys-chat:latest
+    container_name: chat-server-socket
+    command: ["com.pedrobazza.distsyschat.app.ServerApp", "socket", "8080"]
+    ports:
+      - "8080:8080"
+    stdin_open: true
+    tty: true
+
+  # Servidor via gRPC
+  server-grpc:
+    build: .
+    image: distsys-chat:latest
+    container_name: chat-server-grpc
+    command: ["com.pedrobazza.distsyschat.app.ServerApp", "grpc", "50051"]
+    ports:
+      - "50051:50051"
+    stdin_open: true
+    tty: true
+
+  # Servidor via Java RMI
+  server-rmi:
+    build: .
+    image: distsys-chat:latest
+    container_name: chat-server-rmi
+    environment:
+      - RMI_HOST=server-rmi
+    command: ["com.pedrobazza.distsyschat.app.ServerApp", "rmi", "1099"]
+    ports:
+      - "1099:1099"
+    stdin_open: true
+    tty: true
+
+  # Cliente Socket de exemplo (Alice)
+  client-alice:
+    build: .
+    image: distsys-chat:latest
+    depends_on:
+      - server-socket
+    command: ["com.pedrobazza.distsyschat.app.ClientApp", "socket", "server-socket", "8080", "Alice"]
+    stdin_open: true
+    tty: true
+
+  # Cliente Socket de exemplo (Bob)
+  client-bob:
+    build: .
+    image: distsys-chat:latest
+    depends_on:
+      - server-socket
+    command: ["com.pedrobazza.distsyschat.app.ClientApp", "socket", "server-socket", "8080", "Bob"]
+    stdin_open: true
+    tty: true
