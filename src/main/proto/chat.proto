@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package com.pedrobazza.distsyschat.adapters.grpc;
+
+option java_multiple_files = true;
+option java_package = "com.pedrobazza.distsyschat.adapters.grpc";
+option java_outer_classname = "ChatProto";
+
+service ChatService {
+    rpc StreamMessages(ConnectRequest) returns (stream ChatMessage);
+    rpc SendMessage(ChatMessage) returns (SendResponse);
+    rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
+}
+
+message ConnectRequest {
+    string username = 1;
+}
+
+message ChatMessage {
+    string sender = 1;
+    string content = 2;
+    int64 timestamp = 3;
+    string recipient = 4;
+}
+
+message SendResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+message DisconnectRequest {
+    string username = 1;
+}
+
+message DisconnectResponse {
+    bool success = 1;
+}
