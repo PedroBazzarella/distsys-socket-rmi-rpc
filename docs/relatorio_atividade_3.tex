@@ -2,6 +2,7 @@
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
+\usepackage{lmodern}
 \usepackage[brazil]{babel}
 \usepackage{geometry}
 \geometry{top=3cm,bottom=2cm,left=3cm,right=2cm}
@@ -35,12 +36,24 @@
     tabsize=2
 }
 
+\lstdefinelanguage{protobuf}{
+    keywords={syntax, package, service, rpc, returns, message, string, int64, bool, stream},
+    keywordstyle=\color{blue!80!black}\bfseries,
+    sensitive=true,
+    comment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    commentstyle=\color{gray}\itshape,
+    stringstyle=\color{teal!80!black},
+    morestring=[b]",
+    morestring=[b]'
+}
+
 \title{
     \textbf{Atividade 3: Comunicação em Sistemas Distribuídos}\\
     \large Um Estudo Comparativo de Chat Distribuído com Sockets TCP, RPC (gRPC) e Java RMI
 }
 \author{
-    \textbf{Pedro Bazza} \and \textbf{Matheus} \\
+    \textbf{Matheus Antunes Freire} \and \textbf{Pedro Bazzarella Pereira} \\
     \textit{Disciplina de Sistemas Distribuídos}
 }
 \date{Outubro de 2026}
@@ -61,7 +74,7 @@ Este trabalho apresenta o projeto, a implementação e a análise comparativa de
 
 O desenvolvimento de sistemas distribuídos contemporâneos impõe desafios contínuos relativos ao desacoplamento entre módulos de software e à escolha do modelo de comunicação adequado para os requisitos de latência, escalabilidade, interoperabilidade e manutenibilidade. 
 
-Com o intuito de explorar pragmaticamente tais aspectos, este projeto propôs a implementação de um **Sistema de Chat Distribuído Cliente-Servidor Multi-Dispositivo**, no qual múltiplos clientes podem se conectar simultaneamente a um servidor central, enviar mensagens de texto e recebê-las de forma assíncrona e contínua via \textit{broadcast}.
+Com o intuito de explorar pragmaticamente tais aspectos, este projeto propôs a implementação de um \textbf{Sistema de Chat Distribuído Cliente-Servidor Multi-Dispositivo}, no qual múltiplos clientes podem se conectar simultaneamente a um servidor central, enviar mensagens de texto e recebê-las de forma assíncrona e contínua via \textit{broadcast}.
 
 \subsection{Justificativa da Aplicação Escolhida}
 A aplicação de chat foi selecionada por demandar simultaneamente características fundamentais de sistemas distribuídos:
@@ -71,11 +84,9 @@ A aplicação de chat foi selecionada por demandar simultaneamente característi
     \item \textbf{Heterogeneidade Conceitual:} O problema de transmitir uma mensagem para múltiplos participantes evidencia claramente como cada tecnologia lida com fluxo de bytes (Sockets), chamadas remotas de procedimentos (RPC) e referências a objetos remotos (RMI).
 \end{enumerate}
 
----
-
 \section{Arquitetura Geral do Sistema}
 
-Para viabilizar que as três tecnologias coexistissem no mesmo projeto sem duplicação de lógica de apresentação e domínio, adotou-se a **Arquitetura Hexagonal (\textit{Ports \& Adapters})** combinada com o padrão de projeto **\textit{Strategy}**.
+Para viabilizar que as três tecnologias coexistissem no mesmo projeto sem duplicação de lógica de apresentação e domínio, adotou-se a \textbf{Arquitetura Hexagonal (\textit{Ports \& Adapters})} combinada com o padrão de projeto \textbf{\textit{Strategy}}.
 
 \subsection{Estrutura de Camadas}
 \begin{itemize}
@@ -96,14 +107,12 @@ Para viabilizar que as três tecnologias coexistissem no mesmo projeto sem dupli
 \end{itemize}
 
 \subsection{Containerização com Docker}
-Conforme decisão técnica do projeto, toda a aplicação foi containerizada empregando o **JDK 26** em um \textit{build multi-stage}:
+Conforme decisão técnica do projeto, toda a aplicação foi containerizada empregando o \textbf{JDK 26} em um \textit{build multi-stage}:
 \begin{itemize}
     \item No estágio de compilação (\textit{builder}), o Maven gera os stubs a partir da definição do Protocol Buffers (\texttt{.proto}) e empacota todas as dependências em um \textit{shaded JAR} executável.
     \item No estágio final de execução (\textit{runtime}), uma imagem enxuta baseada em \texttt{eclipse-temurin:26} expõe as portas de serviço e fornece os \textit{entrypoints} unificados para o servidor (\texttt{ServerApp}) e clientes (\texttt{ClientApp}).
     \item O \texttt{docker-compose.yml} orquestra instâncias independentes dos três servidores e facilita a execução dos clientes no modo interativo.
 \end{itemize}
-
----
 
 \section{Arquitetura e Implementação das Três Versões}
 
@@ -118,7 +127,7 @@ A versão baseada em sockets emprega a API nativa \texttt{java.net.ServerSocket}
 \end{itemize}
 
 \subsection{Versão 2: RPC com gRPC e Protocol Buffers}
-O paradigma RPC (\textit{Remote Procedure Call}) abstrai a rede de modo que invocar um método em um servidor remoto seja sintaticamente idêntico a chamar uma função local. Para esta versão, utilizou-se o framework de alta performance **gRPC** sobre o protocolo **HTTP/2**, com especificação formal via **Protocol Buffers v3**.
+O paradigma RPC (\textit{Remote Procedure Call}) abstrai a rede de modo que invocar um método em um servidor remoto seja sintaticamente idêntico a chamar uma função local. Para esta versão, utilizou-se o framework de alta performance \textbf{gRPC} sobre o protocolo \textbf{HTTP/2}, com especificação formal via \textbf{Protocol Buffers v3}.
 
 \subsubsection{Definição do Contrato (\texttt{chat.proto})}
 O contrato de comunicação foi definido formalmente:
@@ -151,7 +160,7 @@ message DisconnectResponse { bool success = 1; }
 \end{itemize}
 
 \subsection{Versão 3: Java RMI (Remote Method Invocation)}
-O Java RMI é a tecnologia proprietária da plataforma Java para comunicação baseada em **Objetos Distribuídos**. Diferente de Sockets e RPC convencionais, o RMI permite invocar métodos em instâncias de objetos que residem em uma JVM remota, com transmissão transparente de parâmetros e exceções por meio de stubs e skeletons gerados dinamicamente.
+O Java RMI é a tecnologia proprietária da plataforma Java para comunicação baseada em \textbf{Objetos Distribuídos}. Diferente de Sockets e RPC convencionais, o RMI permite invocar métodos em instâncias de objetos que residem em uma JVM remota, com transmissão transparente de parâmetros e exceções por meio de stubs e skeletons gerados dinamicamente.
 
 \subsubsection{Mecanismo de Comunicação}
 \begin{itemize}
@@ -167,10 +176,8 @@ public interface RmiRemoteService extends Remote {
 }
     \end{lstlisting}
     \item \textbf{Registro de Nomes (\textit{RMI Registry}):} O servidor instancia um serviço remoto (\texttt{RmiRemoteServiceImpl}) estendendo \texttt{UnicastRemoteObject} e registra sua referência no \textit{RMI Registry} na porta \texttt{1099} através do nome chave \texttt{"ChatService"}.
-    \item \textbf{Callback Remoto para Broadcast:} Como o RMI é classicamente orientado a requisições do cliente para o servidor, a bidirecionalidade do chat exigiu a criação de um **Callback Remoto**: o cliente exporta um objeto remoto anônimo (\texttt{ClientCallback}) e envia essa referência remota ao servidor no momento do registro. Ao receber uma mensagem, o servidor itera sobre a coleção de stubs de callback dos clientes e invoca remotamente o método \texttt{receiveMessage(message)} de cada um.
+    \item \textbf{Callback Remoto para Broadcast:} Como o RMI é classicamente orientado a requisições do cliente para o servidor, a bidirecionalidade do chat exigiu a criação de um \textbf{Callback Remoto}: o cliente exporta um objeto remoto anônimo (\texttt{ClientCallback}) e envia essa referência remota ao servidor no momento do registro. Ao receber uma mensagem, o servidor itera sobre a coleção de stubs de callback dos clientes e invoca remotamente o método \texttt{receiveMessage(message)} de cada um.
 \end{itemize}
-
----
 
 \section{Comparação Técnica Entre as Três Abordagens}
 
@@ -221,8 +228,6 @@ O RMI apresenta a menor complexidade de código inicial para comunicação bási
     \item \textbf{Java RMI:} Adequado para sistemas legados corporativos puramente Java (JEE/EJB) operando dentro de redes locais corporativas fechadas, onde a homogeneidade de tecnologia é garantida.
 \end{itemize}
 
----
-
 \section{Dificuldades Encontradas e Soluções Adotadas}
 
 Durante o desenvolvimento da Etapa 1, alguns desafios técnicos foram identificados e solucionados:
@@ -240,8 +245,6 @@ Durante o desenvolvimento da Etapa 1, alguns desafios técnicos foram identifica
     O cliente RMI mantinha threads ativas mesmo após o encerramento do chat, impedindo a finalização do processo do terminal.
     \textit{Solução:} Implementou-se o desregistro explícito com \texttt{unexportObject(callback, true)} associado à chamada deliberada de encerramento de threads residuais no fechamento da interface de linha de comando.
 \end{enumerate}
-
----
 
 \section{Conclusão}
 
