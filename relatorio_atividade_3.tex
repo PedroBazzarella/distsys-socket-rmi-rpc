@@ -1,0 +1,252 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazil]{babel}
+\usepackage{geometry}
+\geometry{top=3cm,bottom=2cm,left=3cm,right=2cm}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{hyperref}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    citecolor=blue!70!black,
+    urlcolor=blue!70!black
+}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue!80!black}\bfseries,
+    stringstyle=\color{teal!80!black},
+    commentstyle=\color{gray}\itshape,
+    numbers=none,
+    frame=single,
+    breaklines=true,
+    showstringspaces=false,
+    tabsize=2
+}
+
+\title{
+    \textbf{Atividade 3: Comunicação em Sistemas Distribuídos}\\
+    \large Um Estudo Comparativo de Chat Distribuído com Sockets TCP, RPC (gRPC) e Java RMI
+}
+\author{
+    \textbf{Pedro Bazza} \and \textbf{Matheus} \\
+    \textit{Disciplina de Sistemas Distribuídos}
+}
+\date{Outubro de 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Este trabalho apresenta o projeto, a implementação e a análise comparativa de uma aplicação distribuída de chat cliente-servidor desenvolvida em Java (JDK 26) sob três paradigmas distintos de comunicação em rede: \textbf{Sockets TCP}, \textbf{Remote Procedure Call (RPC via gRPC)} e \textbf{Remote Method Invocation (Java RMI)}. Para garantir máxima coesão e isolamento tecnológico, a aplicação foi estruturada seguindo os princípios da Arquitetura Hexagonal (\textit{Ports \& Adapters}) em conjunto com o padrão de projeto \textit{Strategy}, permitindo a substituição transparente do mecanismo de transporte em tempo de execução via argumentos de linha de comando. Adicionalmente, toda a infraestrutura foi containerizada através do Docker e Docker Compose, assegurando reprodutibilidade e portabilidade. O relatório detalha as características arquiteturais de cada versão, avalia o nível de abstração, desempenho e complexidade, e discute as dificuldades práticas superadas durante o desenvolvimento.
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+\section{Introdução e Definição da Aplicação}
+
+O desenvolvimento de sistemas distribuídos contemporâneos impõe desafios contínuos relativos ao desacoplamento entre módulos de software e à escolha do modelo de comunicação adequado para os requisitos de latência, escalabilidade, interoperabilidade e manutenibilidade. 
+
+Com o intuito de explorar pragmaticamente tais aspectos, este projeto propôs a implementação de um **Sistema de Chat Distribuído Cliente-Servidor Multi-Dispositivo**, no qual múltiplos clientes podem se conectar simultaneamente a um servidor central, enviar mensagens de texto e recebê-las de forma assíncrona e contínua via \textit{broadcast}.
+
+\subsection{Justificativa da Aplicação Escolhida}
+A aplicação de chat foi selecionada por demandar simultaneamente características fundamentais de sistemas distribuídos:
+\begin{enumerate}
+    \item \textbf{Bidirecionalidade Contínua:} O cliente não apenas requisita dados, mas deve ser capaz de receber mensagens assíncronas do servidor no momento exato em que são publicadas por outros clientes.
+    \item \textbf{Concorrência e Compartilhamento de Estado:} O servidor deve gerenciar múltiplos canais ativos concorrentemente na memória RAM sem corromper o estado dos clientes conectados.
+    \item \textbf{Heterogeneidade Conceitual:} O problema de transmitir uma mensagem para múltiplos participantes evidencia claramente como cada tecnologia lida com fluxo de bytes (Sockets), chamadas remotas de procedimentos (RPC) e referências a objetos remotos (RMI).
+\end{enumerate}
+
+---
+
+\section{Arquitetura Geral do Sistema}
+
+Para viabilizar que as três tecnologias coexistissem no mesmo projeto sem duplicação de lógica de apresentação e domínio, adotou-se a **Arquitetura Hexagonal (\textit{Ports \& Adapters})** combinada com o padrão de projeto **\textit{Strategy}**.
+
+\subsection{Estrutura de Camadas}
+\begin{itemize}
+    \item \textbf{Core de Domínio (\textit{Domain}):} Contém as entidades nucleares do sistema, livres de qualquer dependência externa ou tecnológica:
+    \begin{itemize}
+        \item \texttt{Message}: Representa a mensagem de texto contendo remetente (\textit{sender}), conteúdo textual (\textit{content}), carimbo de data/hora (\textit{timestamp}) e destinatário (\textit{recipient}). Implementa \texttt{Serializable} para atender à serialização nativa do Java.
+        \item \texttt{User}: Encapsula o identificador ou nome de usuário (\textit{username}) do participante conectado.
+    \end{itemize}
+    \item \textbf{Portas (\textit{Ports}):} Definem os contratos abstratos de comunicação:
+    \begin{itemize}
+        \item \texttt{ChatServerPort}: Contrato do servidor, exigindo operações de ciclo de vida (\texttt{start}, \texttt{stop}) e disseminação (\texttt{broadcast}).
+        \item \texttt{ChatClientPort}: Contrato do cliente, exigindo operações de conexão (\texttt{connect}), envio (\texttt{sendMessage}) e encerramento (\texttt{disconnect}).
+        \item \texttt{MessageListener}: Interface funcional atuando como \textit{Observer}, pela qual as camadas de rede notificam a interface de usuário sempre que uma nova mensagem for entregue.
+    \end{itemize}
+    \item \textbf{Adaptadores de Rede (\textit{Adapters}):} Implementações concretas das portas para cada protocolo: \texttt{sockets}, \texttt{grpc} e \texttt{rmi}.
+    \item \textbf{Fábrica de Rede (\textit{NetworkFactory}):} Ponto centralizado de injeção que recebe a \textit{string} correspondente ao protocolo via CLI (\texttt{"socket"}, \texttt{"grpc"} ou \texttt{"rmi"}) e instancia o adaptador correto.
+    \item \textbf{Interface de Linha de Comando (\textit{CLI UI}):} Implementa \texttt{MessageListener} para exibir mensagens na saída padrão sem bloquear o laço de leitura de entrada do usuário via terminal.
+\end{itemize}
+
+\subsection{Containerização com Docker}
+Conforme decisão técnica do projeto, toda a aplicação foi containerizada empregando o **JDK 26** em um \textit{build multi-stage}:
+\begin{itemize}
+    \item No estágio de compilação (\textit{builder}), o Maven gera os stubs a partir da definição do Protocol Buffers (\texttt{.proto}) e empacota todas as dependências em um \textit{shaded JAR} executável.
+    \item No estágio final de execução (\textit{runtime}), uma imagem enxuta baseada em \texttt{eclipse-temurin:26} expõe as portas de serviço e fornece os \textit{entrypoints} unificados para o servidor (\texttt{ServerApp}) e clientes (\texttt{ClientApp}).
+    \item O \texttt{docker-compose.yml} orquestra instâncias independentes dos três servidores e facilita a execução dos clientes no modo interativo.
+\end{itemize}
+
+---
+
+\section{Arquitetura e Implementação das Três Versões}
+
+\subsection{Versão 1: Sockets TCP}
+A versão baseada em sockets emprega a API nativa \texttt{java.net.ServerSocket} e \texttt{java.net.Socket}, operando na camada de transporte sobre o protocolo TCP (\textit{Transmission Control Protocol}), garantindo entrega confiável, ordenada e com verificação de erros.
+
+\subsubsection{Mecanismo de Comunicação}
+\begin{itemize}
+    \item \textbf{Servidor (\texttt{SocketServerAdapter}):} Escuta requisições na porta designada (padrão \texttt{8080}). Ao aceitar uma conexão, delega o canal para uma thread dedicada executada por um \texttt{CachedThreadPool} gerenciando instâncias de \texttt{SocketClientHandler}.
+    \item \textbf{Serialização:} O transporte de objetos \texttt{Message} entre cliente e servidor foi realizado via \texttt{ObjectOutputStream} e \texttt{ObjectInputStream}. Após o envio de cada objeto, executa-se \texttt{flush()} e \texttt{reset()} para descarregar o buffer do socket e limpar o cache de instâncias do fluxo de serialização.
+    \item \textbf{Recepção Assíncrona no Cliente (\texttt{SocketClientAdapter}):} Ao conectar, o cliente inicia uma thread em segundo plano (\textit{daemon}) dedicada exclusivamente a ler o \texttt{ObjectInputStream} e acionar o callback \texttt{MessageListener.onMessageReceived()}.
+\end{itemize}
+
+\subsection{Versão 2: RPC com gRPC e Protocol Buffers}
+O paradigma RPC (\textit{Remote Procedure Call}) abstrai a rede de modo que invocar um método em um servidor remoto seja sintaticamente idêntico a chamar uma função local. Para esta versão, utilizou-se o framework de alta performance **gRPC** sobre o protocolo **HTTP/2**, com especificação formal via **Protocol Buffers v3**.
+
+\subsubsection{Definição do Contrato (\texttt{chat.proto})}
+O contrato de comunicação foi definido formalmente:
+\begin{lstlisting}[language=protobuf]
+syntax = "proto3";
+package com.pedrobazza.distsyschat.adapters.grpc;
+
+service ChatService {
+    rpc StreamMessages(ConnectRequest) returns (stream ChatMessage);
+    rpc SendMessage(ChatMessage) returns (SendResponse);
+    rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
+}
+
+message ConnectRequest { string username = 1; }
+message ChatMessage {
+    string sender = 1;
+    string content = 2;
+    int64 timestamp = 3;
+    string recipient = 4;
+}
+message SendResponse { bool success = 1; string message = 2; }
+message DisconnectRequest { string username = 1; }
+message DisconnectResponse { bool success = 1; }
+\end{lstlisting}
+
+\subsubsection{Mecanismo de Comunicação}
+\begin{itemize}
+    \item \textbf{Streaming Unidirecional Servidor-Cliente (\textit{Server-Streaming RPC}):} O método remoto \texttt{StreamMessages} permite que o cliente envie seu nome de usuário e receba um fluxo contínuo de eventos (\texttt{stream ChatMessage}) via \texttt{StreamObserver}. O servidor mantém as instâncias ativas de \texttt{StreamObserver} em memória para enviar broadcasts instantâneos.
+    \item \textbf{Invocação Unária (\textit{Unary RPC}):} Os métodos \texttt{SendMessage} e \texttt{Disconnect} realizam chamadas diretas com retorno estruturado, manipuladas pelo stub bloqueante (\texttt{ChatServiceBlockingStub}).
+\end{itemize}
+
+\subsection{Versão 3: Java RMI (Remote Method Invocation)}
+O Java RMI é a tecnologia proprietária da plataforma Java para comunicação baseada em **Objetos Distribuídos**. Diferente de Sockets e RPC convencionais, o RMI permite invocar métodos em instâncias de objetos que residem em uma JVM remota, com transmissão transparente de parâmetros e exceções por meio de stubs e skeletons gerados dinamicamente.
+
+\subsubsection{Mecanismo de Comunicação}
+\begin{itemize}
+    \item \textbf{Interface Remota (\texttt{RmiRemoteService}):} Estende \texttt{java.rmi.Remote} e declara os métodos remotos que o servidor disponibiliza:
+    \begin{lstlisting}[language=Java]
+public interface RmiRemoteService extends Remote {
+    interface ClientCallback extends Remote {
+        void receiveMessage(Message message) throws RemoteException;
+    }
+    void registerClient(String username, ClientCallback callback) throws RemoteException;
+    void unregisterClient(String username) throws RemoteException;
+    void postMessage(Message message) throws RemoteException;
+}
+    \end{lstlisting}
+    \item \textbf{Registro de Nomes (\textit{RMI Registry}):} O servidor instancia um serviço remoto (\texttt{RmiRemoteServiceImpl}) estendendo \texttt{UnicastRemoteObject} e registra sua referência no \textit{RMI Registry} na porta \texttt{1099} através do nome chave \texttt{"ChatService"}.
+    \item \textbf{Callback Remoto para Broadcast:} Como o RMI é classicamente orientado a requisições do cliente para o servidor, a bidirecionalidade do chat exigiu a criação de um **Callback Remoto**: o cliente exporta um objeto remoto anônimo (\texttt{ClientCallback}) e envia essa referência remota ao servidor no momento do registro. Ao receber uma mensagem, o servidor itera sobre a coleção de stubs de callback dos clientes e invoca remotamente o método \texttt{receiveMessage(message)} de cada um.
+\end{itemize}
+
+---
+
+\section{Comparação Técnica Entre as Três Abordagens}
+
+A Tabela~\ref{tab:comparacao} resume as principais características comparativas entre Sockets TCP, gRPC e Java RMI no contexto do desenvolvimento da aplicação de chat.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Comparação entre Sockets, gRPC e Java RMI.}
+\label{tab:comparacao}
+\begin{tabularx}{\textwidth}{lXXX}
+\toprule
+\textbf{Critério} & \textbf{Sockets TCP} & \textbf{gRPC (RPC)} & \textbf{Java RMI} \\
+\midrule
+\textbf{Nível de Abstração} & Baixo (fluxo de bytes bruto ou objetos serializados). & Alto (procedimentos remotos com contrato formal IDL). & Muito Alto (invocação de métodos em instâncias distribuídas). \\
+\midrule
+\textbf{Protocolo de Transporte} & TCP puro com portas customizadas. & HTTP/2 com multiplexação de conexões. & TCP / JRMP (\textit{Java Remote Method Protocol}). \\
+\midrule
+\textbf{Formato dos Dados} & Binário via serialização Java nativa. & Binário compacto via Protocol Buffers. & Binário via serialização nativa de classes Java. \\
+\midrule
+\textbf{Bidirecionalidade} & Manual: controle de threads separadas de leitura e escrita. & Nativa: suporte embutido a streaming unidirecional e bidirecional. & Indireta: requer exportação de objetos de \textit{callback} pelo cliente. \\
+\midrule
+\textbf{Interoperabilidade} & Média (depende da especificação manual do protocolo). & Excelente (agnóstico a plataformas e linguagens). & Nula (restrito e acoplado ao ecossistema JVM/Java). \\
+\midrule
+\textbf{Complexidade de Código} & Alta para sincronização e tratamento de exceções de rede. & Média (requer etapa de compilação de stubs, mas simplifica o código). & Baixa para chamadas simples; Média/Alta para gerenciar callbacks e rede. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Nível de Abstração Oferecido}
+\begin{itemize}
+    \item \textbf{Sockets:} Exige que o desenvolvedor gerencie explicitamente todos os aspectos da comunicação: abertura e fechamento de sockets, instanciação de buffers de entrada/saída, tratamento de conexões prematuramente encerradas e criação de laços com multithreading.
+    \item \textbf{gRPC:} Fornece abstração focada no negócio. O desenvolvedor interage com classes fortemente tipadas geradas pelo compilador, não precisando lidar com sockets TCP ou detalhes de transporte HTTP/2.
+    \item \textbf{RMI:} Oferece a mais alta transparência sintática para desenvolvedores Java, pois a invocação remota parece uma chamada de método Java comum (\texttt{service.postMessage(msg)}), encapsulando a complexidade da rede nos stubs.
+\end{itemize}
+
+\subsection{Facilidade de Uso e Complexidade}
+Embora Sockets não exijam bibliotecas externas, a complexidade de manter estados concorrentes e gerenciar threads de leitura/escrita eleva o risco de vazamentos de recursos ou travamentos por concorrência. 
+
+O gRPC possui uma curva de aprendizado inicial vinculada à sintaxe do Protobuf e à configuração dos plugins Maven de geração de código. No entanto, uma vez configurado, o desenvolvimento torna-se extremamente previsível e robusto.
+
+O RMI apresenta a menor complexidade de código inicial para comunicação básica em Java, mas expõe dificuldades relevantes em ambientes modernos com contêineres e NAT, uma vez que requer configuração precisa de hostnames públicos e portas dinâmicas para os stubs exportados.
+
+\subsection{Casos de Uso Práticos}
+\begin{itemize}
+    \item \textbf{Sockets TCP:} Indicado para jogos online em tempo real, sistemas embarcados com hardware limitado, protocolos proprietários de telecomunicações e serviços em que o controle sobre cada byte transmitido é imperativo.
+    \item \textbf{gRPC:} Padrão da indústria para arquiteturas de microsserviços em nuvem, comunicação entre serviços de backend distribuídos em diferentes linguagens (ex: Java, Go, Python, C++) e aplicações móveis que demandam streaming eficiente e baixo consumo de banda.
+    \item \textbf{Java RMI:} Adequado para sistemas legados corporativos puramente Java (JEE/EJB) operando dentro de redes locais corporativas fechadas, onde a homogeneidade de tecnologia é garantida.
+\end{itemize}
+
+---
+
+\section{Dificuldades Encontradas e Soluções Adotadas}
+
+Durante o desenvolvimento da Etapa 1, alguns desafios técnicos foram identificados e solucionados:
+
+\begin{enumerate}
+    \item \textbf{Conflito de Provedores SPI no Empacotamento gRPC com Maven Shade:}
+    Ao gerar o JAR executável contendo todas as dependências (\textit{fat JAR}), o gRPC falhava na resolução de nomes do canal com a mensagem de que nenhum \texttt{NameResolverProvider} havia sido encontrado. 
+    \textit{Solução:} Adicionou-se o \texttt{ServicesResourceTransformer} à configuração do \texttt{maven-shade-plugin} no \texttt{pom.xml}, garantindo que todos os arquivos declaratórios em \texttt{META-INF/services/} fossem mesclados ao invés de sobrescritos.
+    
+    \item \textbf{Roteamento de Callbacks RMI em Rede Docker Bridge:}
+    Em contêineres Docker, o RMI Registry registrava o endereço interno efêmero do contêiner. Quando o cliente tentava registrar o callback ou o servidor tentava invocar métodos de volta no cliente, ocorria travamento por tempo limite de conexão (\textit{timeout}).
+    \textit{Solução:} Configurou-se a propriedade de sistema \texttt{java.rmi.server.hostname} do Java RMI com suporte à leitura de variáveis de ambiente (\texttt{RMI\_HOST}), permitindo que os contêineres se comuniquem corretamente através do DNS interno da rede do Docker Compose.
+    
+    \item \textbf{Finalização Graciosa de Processos Multithread:}
+    O cliente RMI mantinha threads ativas mesmo após o encerramento do chat, impedindo a finalização do processo do terminal.
+    \textit{Solução:} Implementou-se o desregistro explícito com \texttt{unexportObject(callback, true)} associado à chamada deliberada de encerramento de threads residuais no fechamento da interface de linha de comando.
+\end{enumerate}
+
+---
+
+\section{Conclusão}
+
+A execução prática deste projeto atingiu plenamente os objetivos propostos na Atividade 3. A implementação das três versões de chat com Sockets TCP, gRPC e Java RMI sobre a mesma aplicação evidenciou claramente a evolução dos modelos de comunicação distribuída: desde a manipulação direta de fluxos de bytes até a abstração sofisticada de procedimentos e objetos remotos.
+
+A adoção da Arquitetura Hexagonal com o padrão Strategy demonstrou-se fundamental para desacoplar a regra de negócio das especificidades de cada protocolo, permitindo que os mesmos contratos fossem testados sob diferentes transportes com zero impacto na camada de interface com o usuário. Finalmente, a containerização com Docker assegurou a consistência do ambiente de desenvolvimento no moderno JDK 26, garantindo a rápida validação das três abordagens de sistemas distribuídos.
+
+\end{document}
