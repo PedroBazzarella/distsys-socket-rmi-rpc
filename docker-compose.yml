@@ -53,3 +53,12 @@ services:
     command: ["com.pedrobazza.distsyschat.app.ClientApp", "socket", "server-socket", "8080", "Bob"]
     stdin_open: true
     tty: true
+
+  # Cliente Interativo genérico (para conectar via ./chat ou docker compose run --rm client)
+  client:
+    build: .
+    image: distsys-chat:latest
+    stdin_open: true
+    tty: true
+    command: ["com.pedrobazza.distsyschat.app.ClientApp"]
+
