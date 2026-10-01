@@ -1,5 +1,8 @@
 package com.pedrobazza.distsyschat.core.ports;
 
-public interface MessageListener {
+import com.pedrobazza.distsyschat.core.domain.Message;
 
+@FunctionalInterface
+public interface MessageListener {
+    void onMessageReceived(Message message);
 }

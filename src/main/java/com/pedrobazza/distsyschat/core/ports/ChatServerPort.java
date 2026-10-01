@@ -1,5 +1,11 @@
 package com.pedrobazza.distsyschat.core.ports;
 
-public interface ChatServerPort {
+import com.pedrobazza.distsyschat.core.domain.Message;
 
+public interface ChatServerPort {
+    void start(int port) throws Exception;
+    void stop() throws Exception;
+    void broadcast(Message message);
+    boolean isRunning();
+    int getConnectedClientsCount();
 }
